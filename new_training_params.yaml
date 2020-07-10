@@ -1,7 +1,7 @@
 ---
 WORLD_NAME: "reinvent_base"
 RACE_TYPE: "OBJECT_AVOIDANCE"
-SAGEMAKER_SHARED_S3_PREFIX: "deepracer-notebook-sagemaker-200704-102355"
+SAGEMAKER_SHARED_S3_PREFIX: "deepracer-notebook-sagemaker-200710-123920"
 CHANGE_START_POSITION: "true"
 METRICS_S3_OBJECT_KEY: "DeepRacer-Metrics/TrainingMetrics.json"
 AWS_REGION: "us-east-1"

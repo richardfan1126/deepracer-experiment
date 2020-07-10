@@ -132,16 +132,16 @@ class S3BotoDataStore(DataStore):
                             if filename == CheckpointStateFile.checkpoint_state_filename:
                                 checkpoint_file = (root, filename)
                                 continue
-                            if filename.startswith(ckpt_state.name):
-                                abs_name = os.path.abspath(os.path.join(root, filename))
-                                rel_name = os.path.relpath(abs_name, checkpoint_dir)
-                                s3_client.upload_file(Filename=abs_name,
-                                                      Bucket=bucket,
-                                                      Key=self._get_s3_key(rel_name, agent_key),
-                                                      ExtraArgs=self.s3_extra_args,
-                                                      Config=boto3.s3.transfer.TransferConfig(multipart_threshold=1))
-                                check_point_key_list.append(self._get_s3_key(rel_name, agent_key))
-                                num_files_uploaded += 1
+#                             if filename.startswith(ckpt_state.name):
+                            abs_name = os.path.abspath(os.path.join(root, filename))
+                            rel_name = os.path.relpath(abs_name, checkpoint_dir)
+                            s3_client.upload_file(Filename=abs_name,
+                                                  Bucket=bucket,
+                                                  Key=self._get_s3_key(rel_name, agent_key),
+                                                  ExtraArgs=self.s3_extra_args,
+                                                  Config=boto3.s3.transfer.TransferConfig(multipart_threshold=1))
+                            check_point_key_list.append(self._get_s3_key(rel_name, agent_key))
+                            num_files_uploaded += 1
                     time_taken = time.time() - start_time
                     LOG.info("Uploaded %s files for checkpoint %s in %.2f seconds", num_files_uploaded, ckpt_state.num, time_taken)
                     if check_point_key_list:
@@ -199,34 +199,34 @@ class S3BotoDataStore(DataStore):
                                                             self.params.s3_endpoint_url)
 
                 # Clean up old checkpoints
-                if ckpt_state and self.delete_queues[agent_key].qsize() > NUM_MODELS_TO_KEEP:
-                    best_checkpoint = get_best_checkpoint(bucket,
-                                                          self.params.s3_folders[agent_key],
-                                                          self.params.aws_region,
-                                                          self.params.s3_endpoint_url)
-                    while self.delete_queues[agent_key].qsize() > NUM_MODELS_TO_KEEP:
-                        key_list = self.delete_queues[agent_key].get()
-                        if best_checkpoint and all(list(map(lambda file_name: best_checkpoint in file_name,
-                                                            [os.path.split(file)[-1] for file in key_list]))):
-                            self.delete_queues[agent_key].put(key_list)
-                        else:
-                            delete_iteration_ids = set()
-                            for key in key_list:
-                                s3_client.delete_object(Bucket=bucket, Key=key)
-                                # Get the name of the file in the checkpoint directory that has to be deleted
-                                # and extract the iteration id out of the name
-                                file_in_checkpoint_dir = os.path.split(key)[-1]
-                                if len(file_in_checkpoint_dir.split("_Step")) > 0:
-                                    delete_iteration_ids.add(file_in_checkpoint_dir.split("_Step")[0])
-                            LOG.info("Deleting the frozen models in s3 for the iterations: %s",
-                                     delete_iteration_ids)
-                            # Delete the model_{}.pb files from the s3 bucket for the previous iterations
-                            for iteration_id in list(delete_iteration_ids):
-                                frozen_name = "model_{}.pb".format(iteration_id)
-                                frozen_graph_s3_name = frozen_name if len(self.graph_manager.agents_params) == 1 \
-                                    else os.path.join(agent_key, frozen_name)
-                                s3_client.delete_object(Bucket=bucket,
-                                                        Key=self._get_s3_key(frozen_graph_s3_name, agent_key))
+#                 if ckpt_state and self.delete_queues[agent_key].qsize() > NUM_MODELS_TO_KEEP:
+#                     best_checkpoint = get_best_checkpoint(bucket,
+#                                                           self.params.s3_folders[agent_key],
+#                                                           self.params.aws_region,
+#                                                           self.params.s3_endpoint_url)
+#                     while self.delete_queues[agent_key].qsize() > NUM_MODELS_TO_KEEP:
+#                         key_list = self.delete_queues[agent_key].get()
+#                         if best_checkpoint and all(list(map(lambda file_name: best_checkpoint in file_name,
+#                                                             [os.path.split(file)[-1] for file in key_list]))):
+#                             self.delete_queues[agent_key].put(key_list)
+#                         else:
+#                             delete_iteration_ids = set()
+#                             for key in key_list:
+#                                 s3_client.delete_object(Bucket=bucket, Key=key)
+#                                 # Get the name of the file in the checkpoint directory that has to be deleted
+#                                 # and extract the iteration id out of the name
+#                                 file_in_checkpoint_dir = os.path.split(key)[-1]
+#                                 if len(file_in_checkpoint_dir.split("_Step")) > 0:
+#                                     delete_iteration_ids.add(file_in_checkpoint_dir.split("_Step")[0])
+#                             LOG.info("Deleting the frozen models in s3 for the iterations: %s",
+#                                      delete_iteration_ids)
+#                             # Delete the model_{}.pb files from the s3 bucket for the previous iterations
+#                             for iteration_id in list(delete_iteration_ids):
+#                                 frozen_name = "model_{}.pb".format(iteration_id)
+#                                 frozen_graph_s3_name = frozen_name if len(self.graph_manager.agents_params) == 1 \
+#                                     else os.path.join(agent_key, frozen_name)
+#                                 s3_client.delete_object(Bucket=bucket,
+#                                                         Key=self._get_s3_key(frozen_graph_s3_name, agent_key))
         except botocore.exceptions.ClientError:
             log_and_exit("Unable to upload checkpoint",
                          SIMAPP_S3_DATA_STORE_EXCEPTION,
@@ -248,8 +248,21 @@ class S3BotoDataStore(DataStore):
         if not os.path.exists(os.path.join(SM_MODEL_OUTPUT_DIR, agent_name)):
             os.makedirs(os.path.join(SM_MODEL_OUTPUT_DIR, agent_name))
         output_head = ['main_level/{}/main/online/network_1/ppo_head_0/policy'.format(agent_name)]
-        frozen = tf.graph_util.convert_variables_to_constants(graph_manager.sess[agent_name],
-                                                              graph_manager.sess[agent_name].graph_def, output_head)
+        
+        
+        def get_session(sess):
+            session = sess
+            while type(session).__name__ != 'Session':
+                #pylint: disable=W0212
+                session = session._sess
+            return session
+        session = get_session(graph_manager.sess[agent_name])
+        
+#         frozen = tf.graph_util.convert_variables_to_constants(graph_manager.sess[agent_name],
+#                                                               graph_manager.sess[agent_name].graph_def, output_head)
+        frozen = tf.graph_util.convert_variables_to_constants(session,
+                                                              session.graph_def, output_head)
+        
         tf.train.write_graph(frozen, os.path.join(SM_MODEL_PB_TEMP_FOLDER, agent_name),
                              'model_{}.pb'.format(iteration_id), as_text=False)
 

@@ -62,6 +62,46 @@ def training_worker(graph_manager, task_parameters, user_batch_size,
 
         # To handle SIGTERM
         door_man = utils.DoorMan()
+        
+#         print('---------------- hook.out_dir ----------------')
+#         print(hook.out_dir)
+        
+#         print('---------------- hook.dry_run ----------------')
+#         print(hook.dry_run)
+        
+#         print('---------------- hook.save_config ----------------')
+#         print(hook.save_config)
+        
+#         print('---------------- hook.include_regex ----------------')
+#         print(hook.include_regex)
+        
+#         print('---------------- hook.include_collections ----------------')
+#         print(hook.include_collections)
+        
+#         print('---------------- hook.save_all ----------------')
+#         print(hook.save_all)
+        
+#         print('---------------- hook.include_workers ----------------')
+#         print(hook.include_workers)
+        
+        for level in graph_manager.level_managers:
+            for agent in level.agents.values():
+                for item in agent.networks.items():
+                    name = item[0]
+                    network = item[1]
+                    
+                    print("NETWORK:")
+                    print(name)
+                    print(network)
+                    
+                    if network.global_network is not None:
+                        network.global_network.optimizer = graph_manager.smdebug_hook.wrap_optimizer(network.global_network.optimizer)
+                        
+                    if network.online_network is not None:
+                        network.online_network.optimizer = graph_manager.smdebug_hook.wrap_optimizer(network.online_network.optimizer)
+
+                    if network.target_network is not None:
+                        network.target_network.optimizer = graph_manager.smdebug_hook.wrap_optimizer(network.target_network.optimizer)
 
         while steps < graph_manager.improve_steps.num_steps:
              # Collect profiler information only IS_PROFILER_ON is true
@@ -105,6 +145,7 @@ def training_worker(graph_manager, task_parameters, user_batch_size,
                         for agent in level.agents.values():
                             if np.isnan(agent.loss.get_mean()):
                                 rollout_has_nan = True
+                            
                     if rollout_has_nan:
                         log_and_exit("NaN detected in loss function, aborting training.",
                                      SIMAPP_TRAINING_WORKER_EXCEPTION,
@@ -122,6 +163,33 @@ def training_worker(graph_manager, task_parameters, user_batch_size,
                     for agent in level.agents.values():
                         agent.ap.algorithm.num_consecutive_playing_steps.num_steps = user_episode_per_rollout
                         agent.ap.algorithm.num_steps_between_copying_online_weights_to_target.num_steps = user_episode_per_rollout
+                        
+#                         for item in agent.networks.items():
+#                             name = item[0]
+#                             network = item[1]
+
+#                             print("NETWORK:")
+#                             print(name)
+#                             print(network)
+                            
+#                             print("--------------------------global_network--------------------------")
+#                             print(network.global_network)
+#                             print("--------------------------online_network--------------------------")
+#                             print(network.online_network)
+#                             print("--------------------------target_network--------------------------")
+#                             print(network.target_network)
+
+#                             if network.global_network is not None:
+#                                 hook.add_to_collection("losses", network.global_network.total_loss)
+#                                 smdebug_collection.add(network.global_network.total_loss)
+
+#                             if network.online_network is not None:
+#                                 hook.add_to_collection("losses", network.online_network.total_loss)
+#                                 smdebug_collection.add(network.online_network.total_loss)
+
+#                             if network.target_network is not None:
+#                                 hook.add_to_collection("losses", network.target_network.total_loss)
+#                                 smdebug_collection.add(network.target_network.total_loss)
 
                 if door_man.terminate_now:
                     log_and_exit("Received SIGTERM. Checkpointing before exiting.",
@@ -308,7 +376,8 @@ def main():
     graph_manager.data_store = S3BotoDataStore(ds_params_instance, graph_manager)
 
     task_parameters = TaskParameters()
-    task_parameters.experiment_path = SM_MODEL_OUTPUT_DIR
+#     task_parameters.experiment_path = SM_MODEL_OUTPUT_DIR
+    task_parameters.experiment_path = args.checkpoint_dir
     task_parameters.checkpoint_save_secs = 20
     if use_pretrained_model:
         task_parameters.checkpoint_restore_path = args.pretrained_checkpoint_dir

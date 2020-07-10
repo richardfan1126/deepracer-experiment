@@ -155,6 +155,12 @@ def get_graph_manager(hp_dict, agent_list, run_phase_subject, enable_domain_rand
     env_params.done_condition = done_condition
     vis_params = VisualizationParameters()
     vis_params.dump_mp4 = False
+#     vis_params.print_networks_summary = True
+#     vis_params.dump_csv = True
+#     vis_params.dump_signals_to_csv_every_x_episodes = True
+#     vis_params.dump_in_episode_signals = True
+#     vis_params.dump_parameters_documentation = True
+    vis_params.tensorboard = True
 
     ########
     # Test #

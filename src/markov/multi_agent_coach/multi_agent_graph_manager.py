@@ -27,6 +27,8 @@ from markov.multi_agent_coach.multi_agent_level_manager import MultiAgentLevelMa
 
 
 class MultiAgentGraphManager(object):
+    smdebug_hook = None
+    
     """
     A simple multi-agent graph manager and a single environment which is interacted with.
     """
@@ -34,7 +36,7 @@ class MultiAgentGraphManager(object):
                  schedule_params: ScheduleParameters,
                  vis_params: VisualizationParameters = VisualizationParameters(),
                  preset_validation_params: PresetValidationParameters = PresetValidationParameters(),
-                 done_condition=any):
+                 done_condition=any):        
         self.done_condition = done_condition
         self.sess = {agent_params.name: None for agent_params in agents_params}
         self.level_managers = []  # type: List[MultiAgentLevelManager]
@@ -117,6 +119,10 @@ class MultiAgentGraphManager(object):
         self.top_level_manager = self.level_managers[0]
         for level_manager in self.level_managers:
             level_manager.parent_graph_manager = self
+            
+        import smdebug.tensorflow as smd
+        self.smdebug_hook = smd.SessionHook.create_from_json_file()
+        self.smdebug_hook.set_mode(smd.modes.TRAIN)
 
         # create a session (it needs to be created after all the graph ops were created)
         self.sess = {agent_params.name: None for agent_params in self.agents_params}
@@ -223,7 +229,9 @@ class MultiAgentGraphManager(object):
             self.set_session(self.sess)
         else:
             # regular session
-            self.sess = {agent_params.name: tf.Session(config=config) for agent_params in self.agents_params}
+#             self.sess = {agent_params.name: tf.Session(config=config) for agent_params in self.agents_params}
+            self.sess = {agent_params.name: tf.train.MonitoredTrainingSession(config=config, hooks=[self.smdebug_hook]) for agent_params in self.agents_params}
+    
             # set the session for all the modules
             self.set_session(self.sess)
 
@@ -244,7 +252,10 @@ class MultiAgentGraphManager(object):
             self._create_session_mx()
         else:
             raise ValueError('Invalid framework {}'.format(task_parameters.framework_type))
-
+        
+        import tensorflow as tf
+        tf.get_default_graph()._unsafe_unfinalize()
+        
         # Create parameter saver
         self.checkpoint_saver = {agent_params.name: SaverCollection() for agent_params in self.agents_params}
         for level in self.level_managers:
@@ -388,6 +399,10 @@ class MultiAgentGraphManager(object):
         :param steps: number of training iterations to perform
         :return: None
         """
+        
+        import smdebug.tensorflow as smd
+        self.smdebug_hook.set_mode(smd.modes.TRAIN)
+        
         self.verify_graph_was_created()
 
         with self.phase_context(RunPhase.TRAIN):
@@ -477,6 +492,10 @@ class MultiAgentGraphManager(object):
         :param steps: the number of steps as a tuple of steps time and steps count
         :return: bool, True if the target reward and target success has been reached
         """
+        
+        import smdebug.tensorflow as smd
+        self.smdebug_hook.set_mode(smd.modes.EVAL)
+        
         self.verify_graph_was_created()
 
         if steps.num_steps > 0:
@@ -635,8 +654,19 @@ class MultiAgentGraphManager(object):
                 os.mkdir(agent_checkpoint_save_dir)
 
             agent_checkpoint_path = os.path.join(agent_checkpoint_save_dir, checkpoint_name)
+            
+            def get_session(sess):
+                session = sess
+                while type(session).__name__ != 'Session':
+                    #pylint: disable=W0212
+                    session = session._sess
+                return session
+            
+            session = get_session(self.sess[agent_params.name])
+            
             if not isinstance(self.task_parameters, DistributedTaskParameters):
-                saved_checkpoint_paths.append(self.checkpoint_saver[agent_params.name].save(self.sess[agent_params.name], agent_checkpoint_path))
+#                 saved_checkpoint_paths.append(self.checkpoint_saver[agent_params.name].save(self.sess[agent_params.name], agent_checkpoint_path))
+                saved_checkpoint_paths.append(self.checkpoint_saver[agent_params.name].save(session, agent_checkpoint_path))
             else:
                 saved_checkpoint_paths.append(agent_checkpoint_path)
 
